@@ -1,47 +1,38 @@
-const WebSocket = require("ws");
-const express = require("express");
-const cors = require("cors");
-const http = require("http");
+import express from "express";
+import cors from "cors";
+import http from "http";
+import dotenv from "dotenv";
+import productRoutes from "./routes/products.js";
+
+import { setupWebSocket } from "./websocket.js";
+import { error } from "console";
+
+dotenv.config();
+
 const app = express();
 
-require("dotenv").config();
-
+// CORS Middleware
 app.use(cors({ origin: "http://localhost:5173" }));
 
+// Initialize the HTTP server
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
 
-const prices = {};
+// Set up WebSocket connection
+setupWebSocket(server);
 
-const symbols = ["dogeusdt", "ethusdt"];
-const binanceWs = new WebSocket(
-  `wss://stream.binance.com:9443/stream?streams=${symbols
-    .map((symbol) => `${symbol}@trade`)
-    .join("/")}`
-);
+// Define API Routes
+app.use("/api/products", productRoutes);
 
-binanceWs.on("message", (data) => {
-  const message = JSON.parse(data);
-  const symbol = message.stream.split("@")[0];
-  const price = message.data.p;
-  prices[symbol.toUpperCase()] = price;
-
-  wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify({ symbol: symbol.toUpperCase(), price }));
-    }
-  });
+// Error handling middleware
+app.use((err, req, res, next) => {
+  if (err.stack) {
+    throw new error(err.stack);
+  }
+  res.status(500).send("Something went wrong!");
 });
 
-binanceWs.on("open", () => {
-  console.log("Connected to Binance WebSocket");
-});
-
-binanceWs.on("close", () => {
-  console.log("Disconnected from Binance WebSocket");
-});
-
-const PORT = process.env.PORT;
+// Set the server to listen on the specified port
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
